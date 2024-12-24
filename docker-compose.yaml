@@ -1,0 +1,80 @@
+services:
+  # Serviço 1
+  spring-app: &spring-app
+    container_name: spring-app
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    image: ricardoporfirio/crebito-spring-app
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-database:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    networks:
+      - spring-app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.55"
+          memory: "200MB"
+
+  # Serviço 2
+  spring-app-2:
+    <<: *spring-app
+    container_name: spring-app-2
+    ports:
+      - "8081:8080"  # Porta diferente para evitar conflito
+
+  # Database
+  db:
+    container_name: postgres-database
+    image: postgres:16.3-alpine3.18
+    restart: always
+    shm_size: 128mb
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+    volumes:
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - spring-app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "140MB"
+
+  # Load Balancer
+  reverse-proxy:
+    restart: always
+    image: ricardoporfirio/crebito-reverse-proxy
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - spring-app
+      - spring-app-2
+    ports:
+      - 9999:80
+    networks:
+      - spring-app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: "10MB"
+
+networks:
+  spring-app-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  .env:
+  init-user-db.sh:
+  postgresql.conf:
